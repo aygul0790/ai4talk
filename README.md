@@ -1,8 +1,8 @@
 # Data analysis
 - Document here the project: ai4talk
 - Description: Project Description
-- Data Source:
-- Type of analysis:
+- Data Source: https://www.kaggle.com/datasets/michaelcripman/ai4talk
+- Type of analysis: NLP, ASR and Translation
 
 Please document the project the better you can.
 
