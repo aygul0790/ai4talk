@@ -1,64 +1,54 @@
-from transformers import __version__ as transformers_ver
-from tqdm import __version__ as tqdm_ver
-from torch import __version__ as torch_ver
-from torchaudio import __version__ as torchaudio_ver
-from pandas import __version__ as pd_ver
-print(f"transformers_ver:\t{transformers_ver}")
-print(f"tqdm_ver:\t{tqdm_ver}")
-print(f"torch_ver:\t{torch_ver}")
-print(f"torchaudio_ver:\t{torchaudio_ver}")
-print(f"pandas_ver:\t{pd_ver}")
-
-import os
 import torch
-import torchaudio
-import fire
 import pandas as pd
-from transformers import AutoModelForCTC, Wav2Vec2Processor
+from ai4talk.ml_logic.params import Config
+from ai4talk.ml_logic.registry import WhisperModelModule, SpeechDataset, WhisperDataCollatorWhithPadding
+import whisper
+from tqdm.notebook import tqdm
+from ai4talk.ml_logic.utils import highlight_diffs
+def transcript(file_name):
+    checkpoint_path = "/home/dhanya/code/aygul0790/ai4talk/checkpoints/checkpoint-epoch=0009.ckpt"
+    state_dict = torch.load(checkpoint_path) #, map_location=torch.device('cpu'))
+    state_dict = state_dict['state_dict']
+    cfg = Config()
+    whisper_model = WhisperModelModule(cfg)
+    whisper_model.load_state_dict(state_dict)
+    woptions = whisper.DecodingOptions(language="tt", without_timestamps=True) #, fp16 = False)
+    wtokenizer = whisper.tokenizer.get_tokenizer(True, language="tt", task=woptions.task)
+    fpath = '/home/dhanya/code/aygul0790/ai4talk/notebooks/tat/' + str(file_name)
+    df = pd.read_csv('/home/dhanya/code/aygul0790/ai4talk/notebooks/tat/metadata.csv')
+    df['audio_path'] = fpath
+    df['text'] = df['transcription']
+    df = df.reset_index()
+    df['audio_id'] = df['index']
+    df = df[df['file_name'] == file_name]
+    eval_audio_transcript_pair_list = list(df[['audio_id', 'audio_path', 'text']].itertuples(index=False, name=None))
+    dataset = SpeechDataset(eval_audio_transcript_pair_list, wtokenizer, 16000)
+    loader = torch.utils.data.DataLoader(dataset, batch_size=1, collate_fn=WhisperDataCollatorWhithPadding())
+    refs = []
+    res = []
+    for b in tqdm(loader):
+        input_ids = b["input_ids"].half().cuda()
+        labels = b["labels"].long().cuda()
+        with torch.no_grad():
+            #audio_features = whisper_model.model.encoder(input_ids)
+            #out = whisper_model.model.decoder(enc_input_ids, audio_features)
+            results = whisper_model.model.decode(input_ids, woptions)
+            for r in results:
+                res.append(r.text)
+            for l in labels:
+                l[l == -100] = wtokenizer.eot
+                ref = wtokenizer.decode(l, skip_special_tokens=True)
+                refs.append(ref)
+ #   res = [highlight_diffs(x,y) for x,y in zip(refs,res)]
+    return {"transcript true": refs, "transcript from model": res}
 
-model = AutoModelForCTC.from_pretrained("/app/wav2vec2-xlsr-53-espeak-cv-ft")
-processor = Wav2Vec2Processor.from_pretrained("/app/wav2vec2-xlsr-53-espeak-cv-ft")
-
-device_s = f"cuda" if torch.cuda.is_available() else "cpu"
-print(f"using device {device_s}")
-device = torch.device(device_s)
-
-model = model.to(device)
-
-os.makedirs('./output', exist_ok=True)
-
-def recognizer(fpath):
-    try:
-        waveform, sample_rate = torchaudio.load(fpath)
-        waveform = waveform.to(device)
-        logits = model(waveform).logits
-        pred_ids = torch.argmax(logits, dim=-1)
-        pred_str = processor.batch_decode(pred_ids)[0]
-        return pred_str
-    except:
-        return "SIL"
-
-
-
-def _solve_asr(asr_covered_path: str):
-    asr_data = pd.read_csv(asr_covered_path)
-    audio_dirname = os.path.dirname(asr_covered_path)
-    audio_paths = audio_dirname + '/' + asr_data['source'] 
-    asr_data["transcription"] = audio_paths.apply(recognizer).str.replace(' ','')
-    asr_data["transcription"] = asr_data["transcription"].apply(lambda v: v if v else "SIL")
-    asr_data.to_csv("./output/asr-solution.csv", index=False)
-
-def _solve_translation(translation_covered_path: str):
-    translation_data = pd.read_csv(translation_covered_path)
-    translation_data["translation"] = translation_data["source"]
-    translation_data["translation"] = translation_data["translation"].apply(lambda v: v if v else "UNK")
-    translation_data.to_csv("./output/translation-solution.csv", index=False)
-
-
-def solve_tasks(asr_path: str, translation_path: str = None):
-    _solve_asr(asr_path)
-    if translation_path is not None:
-        _solve_translation(translation_path)
-
-if __name__ == '__main__':
-    fire.Fire()
+from ai4talk.ml_logic.utils import from_ipa_to_tat
+def translate(data):
+    data = from_ipa_to_tat(data)
+    data = data.split()
+    data = [x[1:] if x.startswith('йe') else x for x in data]
+    data = [x.replace('йa', 'я') if x.startswith('йa') else x for x in data]
+    data = [x.replace('йa', 'я') if 'йa' in x else x for x in data]
+    data = [x.replace('ъ', 'ь') if x.endswith('ъ') else x for x in data]
+    data = ' '.join(data)
+    return data
