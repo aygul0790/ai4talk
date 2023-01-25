@@ -1,6 +1,6 @@
 # Data analysis
 - Document here the project: ai4talk
-- Description: Project Description
+- Description: in this project we use OpenAI Whisper model for the audio-to-text transcription based on the International Phonetic Alphabet
 - Data Source: https://www.kaggle.com/datasets/michaelcripman/ai4talk
 - Type of analysis: NLP, ASR and Translation
 
