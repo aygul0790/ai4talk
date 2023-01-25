@@ -2,11 +2,7 @@
 - Document here the project: ai4talk
 - Description: Project Description
 - Data Source: https://www.kaggle.com/datasets/michaelcripman/ai4talk
-<<<<<<< HEAD
 - Type of analysis: NLP, ASR and Translation
-=======
-- Type of analysis: NLP fpr ASR and Translation
->>>>>>> 288b06c2aebae69855e5e8cd6800d39475fa4e86
 
 Please document the project the better you can.
 
